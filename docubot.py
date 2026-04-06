@@ -32,7 +32,8 @@ class DocuBot:
     def load_documents(self):
         """
         Loads all .md and .txt files inside docs_folder.
-        Returns a list of tuples: (filename, text)
+        Returns a list of tuples: (filename, paragraph_text) — one entry
+        per non-empty paragraph so retrieval returns precise snippets.
         """
         docs = []
         pattern = os.path.join(self.docs_folder, "*.*")
@@ -41,7 +42,11 @@ class DocuBot:
                 with open(path, "r", encoding="utf8") as f:
                     text = f.read()
                 filename = os.path.basename(path)
-                docs.append((filename, text))
+                # Split into paragraphs on blank lines
+                for paragraph in text.split("\n\n"):
+                    paragraph = paragraph.strip()
+                    if paragraph:
+                        docs.append((filename, paragraph))
         return docs
 
     # -----------------------------------------------------------
@@ -64,7 +69,15 @@ class DocuBot:
         ignore punctuation if needed.
         """
         index = {}
-        # TODO: implement simple indexing
+        for filename, text in documents:
+            for word in text.lower().split():
+                word = word.strip('.,!?;:()[]{}"\'-`')
+                if not word:
+                    continue
+                if word not in index:
+                    index[word] = []
+                if filename not in index[word]:
+                    index[word].append(filename)
         return index
 
     # -----------------------------------------------------------
@@ -81,8 +94,13 @@ class DocuBot:
         - Count how many appear in the text
         - Return the count as the score
         """
-        # TODO: implement scoring
-        return 0
+        text_lower = text.lower()
+        score = 0
+        for word in query.lower().split():
+            word = word.strip('.,!?;:()[]{}"\'-`')
+            if word and word in text_lower:
+                score += 1
+        return score
 
     def retrieve(self, query, top_k=3):
         """
@@ -91,9 +109,14 @@ class DocuBot:
 
         Return a list of (filename, text) sorted by score descending.
         """
+        MIN_SCORE = 2  # guardrail: require at least 2 query words to match
         results = []
-        # TODO: implement retrieval logic
-        return results[:top_k]
+        for filename, text in self.documents:
+            score = self.score_document(query, text)
+            if score >= MIN_SCORE:
+                results.append((score, filename, text))
+        results.sort(key=lambda x: x[0], reverse=True)
+        return [(filename, text) for _, filename, text in results[:top_k]]
 
     # -----------------------------------------------------------
     # Answering Modes
